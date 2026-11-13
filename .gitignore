@@ -1,0 +1,20 @@
+# Build artifacts
+*.xpi
+dist/
+web-ext-artifacts/
+
+# Dependencies
+node_modules/
+
+# Tooling
+.web-ext-unused/
+.eslintcache
+
+# Local secrets / env (never commit anything Zoho-related here)
+.env
+*.local
+token*
+
+# OS/editor noise
+.DS_Store
+*.swp

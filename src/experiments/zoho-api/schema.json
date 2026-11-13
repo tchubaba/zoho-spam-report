@@ -1,0 +1,44 @@
+[
+  {
+    "namespace": "zohoApi",
+    "description": "Privileged Zoho Mail API client: OAuth consent via localhost callback, token storage in Thunderbird's password manager, and spam-report calls. (Not affiliated with Zoho.)",
+    "functions": [
+      {
+        "name": "connect",
+        "description": "Start OAuth consent for a Zoho data center ('.com', '.eu', '.in', '.com.au', '.com.cn'). Opens browser; listens on localhost for the redirect; stores refresh token. Resolves with the connections list.",
+        "type": "function",
+        "parameters": [
+          { "name": "dc", "type": "string" }
+        ],
+        "async": true
+      },
+      {
+        "name": "disconnect",
+        "description": "Remove a stored connection and its tokens.",
+        "type": "function",
+        "parameters": [
+          { "name": "connectionId", "type": "string" }
+        ],
+        "async": true
+      },
+      {
+        "name": "connections",
+        "description": "List connections with their mailboxes (email, accountId, dc).",
+        "type": "function",
+        "parameters": [],
+        "async": true
+      },
+      {
+        "name": "reportSpam",
+        "description": "PUT updatemessage mode=moveToSpam for one messageId on an accountId.",
+        "type": "function",
+        "parameters": [
+          { "name": "dc", "type": "string" },
+          { "name": "accountId", "type": "string" },
+          { "name": "messageId", "type": "string" }
+        ],
+        "async": true
+      }
+    ]
+  }
+]
