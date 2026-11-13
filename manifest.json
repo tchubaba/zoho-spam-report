@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Zoho Spam Report",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Report junk to Zoho Mail's spam filter from Thunderbird. Unofficial; not affiliated with Zoho.",
   "browser_specific_settings": {
     "gecko": {
@@ -11,8 +11,7 @@
   },
   "permissions": [
     "accountsRead",
-    "messagesRead",
-    "menus"
+    "messageDisplay"
   ],
   "background": {
     "scripts": ["src/background.js"]
@@ -21,11 +20,16 @@
     "page": "src/options/options.html",
     "open_in_tab": true
   },
+  "message_display_action": {
+    "name": "Report to Zoho as spam"
+  },
   "experiment_apis": {
     "zohoApi": {
       "schema": "src/experiments/zoho-api/schema.json",
       "parent_process": true,
-      "paths": [["connect", "disconnect", "connections", "reportSpam"]]
+      "paths": [
+        ["setConnection", "clearConnection", "connectionStatus", "listAccounts", "report", "markJunkSelected"]
+      ]
     }
   }
 }

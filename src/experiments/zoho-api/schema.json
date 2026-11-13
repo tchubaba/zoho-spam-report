@@ -1,43 +1,65 @@
 [
   {
     "namespace": "zohoApi",
-    "description": "Privileged Zoho Mail API client: OAuth consent via localhost callback, token storage in Thunderbird's password manager, and spam-report calls. (Not affiliated with Zoho.)",
+    "description": "Privileged Zoho Mail API client (alpha: in-memory access token, nothing persisted) plus native junk-marking. Unofficial; not affiliated with Zoho.",
     "functions": [
       {
-        "name": "connect",
-        "description": "Start OAuth consent for a Zoho data center ('.com', '.eu', '.in', '.com.au', '.com.cn'). Opens browser; listens on localhost for the redirect; stores refresh token. Resolves with the connections list.",
+        "name": "setConnection",
         "type": "function",
-        "parameters": [
-          { "name": "dc", "type": "string" }
-        ],
-        "async": true
-      },
-      {
-        "name": "disconnect",
-        "description": "Remove a stored connection and its tokens.",
-        "type": "function",
-        "parameters": [
-          { "name": "connectionId", "type": "string" }
-        ],
-        "async": true
-      },
-      {
-        "name": "connections",
-        "description": "List connections with their mailboxes (email, accountId, dc).",
-        "type": "function",
-        "parameters": [],
-        "async": true
-      },
-      {
-        "name": "reportSpam",
-        "description": "PUT updatemessage mode=moveToSpam for one messageId on an accountId.",
-        "type": "function",
+        "async": true,
+        "description": "Hold an access token in memory for a data center ('com', 'eu', 'in', 'com.au', 'com.cn'). In-memory only in the alpha.",
         "parameters": [
           { "name": "dc", "type": "string" },
-          { "name": "accountId", "type": "string" },
-          { "name": "messageId", "type": "string" }
-        ],
-        "async": true
+          { "name": "accessToken", "type": "string" },
+          { "name": "expiresInSeconds", "type": "integer", "optional": true }
+        ]
+      },
+      {
+        "name": "clearConnection",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "connectionStatus",
+        "type": "function",
+        "async": true,
+        "parameters": [],
+        "description": "Returns { connected, dc, expiresAt } without exposing the token."
+      },
+      {
+        "name": "listAccounts",
+        "type": "function",
+        "async": true,
+        "parameters": [],
+        "description": "GET /api/accounts -> [{email, accountId}]."
+      },
+      {
+        "name": "report",
+        "type": "function",
+        "async": true,
+        "description": "Find the Zoho messageId matching the given message details, then PUT updatemessage mode=moveToSpam. Returns { ok, messageId?, error? }.",
+        "parameters": [
+          {
+            "name": "details",
+            "type": "object",
+            "properties": {
+              "accountId": { "type": "string" },
+              "fromAddress": { "type": "string" },
+              "subject": { "type": "string" },
+              "dateEpochMs": { "type": "number" },
+              "internetMessageId": { "type": "string", "optional": true }
+            },
+            "required": ["accountId", "fromAddress", "subject", "dateEpochMs"]
+          }
+        ]
+      },
+      {
+        "name": "markJunkSelected",
+        "type": "function",
+        "async": true,
+        "description": "Mark the currently selected message junk in the most recent 3-pane window, inheriting the user's junk settings. Returns { ok, method?, error? }.",
+        "parameters": []
       }
     ]
   }

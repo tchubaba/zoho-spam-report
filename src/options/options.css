@@ -1,0 +1,28 @@
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 46rem;
+  margin: 1.5rem auto;
+  padding: 0 1rem;
+}
+h1 { font-size: 1.4rem; }
+.disclaimer { color: #666; font-size: 0.85rem; }
+.note { font-size: 0.85rem; color: #555; }
+.note code { background: #eee; padding: 0 0.25em; border-radius: 3px; }
+.status { padding: 0.5rem 0.75rem; border-radius: 6px; margin: 0.75rem 0; font-size: 0.9rem; }
+.status.ok { background: #e4f5e2; color: #1d6a14; }
+.status.warn { background: #fdf3d7; color: #7a5c00; }
+label { display: block; margin-top: 0.75rem; font-weight: 600; font-size: 0.9rem; }
+select, textarea, input[type="number"] {
+  width: 100%;
+  margin-top: 0.25rem;
+  font: inherit;
+  padding: 0.4rem;
+  box-sizing: border-box;
+}
+.actions { margin-top: 1rem; display: flex; gap: 0.5rem; }
+button { font: inherit; padding: 0.45rem 1rem; cursor: pointer; }
+.account-list { font-size: 0.9rem; }
+.account-list li { margin: 0.2rem 0; }
+.account-list li.ok { color: #1d6a14; }
+.account-list li.warn { color: #7a5c00; }
+.account-list li.err { color: #a01212; }

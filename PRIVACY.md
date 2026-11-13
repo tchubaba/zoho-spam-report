@@ -12,10 +12,11 @@ machine and only to perform the action you explicitly request.
   scopes: `ZohoMail.accounts.READ` (list which mailboxes your token controls),
   `ZohoMail.messages.READ` (locate the message you clicked on), and
   `ZohoMail.messages.UPDATE` (apply your spam report). Nothing else.
-- **Token storage.** OAuth tokens are kept in Thunderbird's built-in password
-  manager, the same store Thunderbird uses for your account passwords.
+- **Token storage.** During the alpha, OAuth tokens are held in memory only and never written to
+  disk. Password-manager storage arrives with the one-click Connect flow.
 - **What a spam report sends to Zoho.** The Zoho `messageId` of the message you
-  reported — the same data Zoho's own webmail "Mark as spam" button sends. The
+  reported. This is the same data Zoho's own webmail "Mark as spam" button
+sends. The
   message content is already on Zoho's servers; the extension never uploads
   message bodies.
 - **Revocation.** You can remove all access at any time by deleting the
