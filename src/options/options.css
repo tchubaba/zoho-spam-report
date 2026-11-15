@@ -11,6 +11,7 @@ h1 { font-size: 1.4rem; }
 .status { padding: 0.5rem 0.75rem; border-radius: 6px; margin: 0.75rem 0; font-size: 0.9rem; }
 .status.ok { background: #e4f5e2; color: #1d6a14; }
 .status.warn { background: #fdf3d7; color: #7a5c00; }
+.status.err { background: #f8dcdc; color: #a01212; }
 label { display: block; margin-top: 0.75rem; font-weight: 600; font-size: 0.9rem; }
 select, textarea, input[type="number"] {
   width: 100%;
@@ -26,3 +27,7 @@ button { font: inherit; padding: 0.45rem 1rem; cursor: pointer; }
 .account-list li.ok { color: #1d6a14; }
 .account-list li.warn { color: #7a5c00; }
 .account-list li.err { color: #a01212; }
+
+.raw-dump { background: #1e1e1e; color: #d6d6d6; padding: 10px; border-radius: 6px;
+  max-height: 400px; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+button.ghost { font-size: 12px; padding: 2px 8px; vertical-align: middle; }

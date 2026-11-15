@@ -49,7 +49,10 @@
   </section>
 
   <section id="accounts">
-    <h2>Detected mailboxes</h2>
+    <h2>Detected mailboxes
+  <button id="dump-btn" class="ghost" title="Raw GET /api/accounts JSON for debugging">dump raw JSON</button>
+</h2>
+<pre id="raw-dump" class="raw-dump" hidden></pre>
     <p class="note">Mailboxes your token can reach. Messages delivered to these
        addresses get the "Report to Zoho as spam" button.</p>
     <ul id="account-list" class="account-list"></ul>

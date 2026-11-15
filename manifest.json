@@ -11,7 +11,8 @@
   },
   "permissions": [
     "accountsRead",
-    "messageDisplay"
+    "messagesRead",
+    "storage"
   ],
   "background": {
     "scripts": ["src/background.js"]
@@ -21,15 +22,16 @@
     "open_in_tab": true
   },
   "message_display_action": {
-    "name": "Report to Zoho as spam"
+    "default_title": "Report to Zoho as spam"
   },
   "experiment_apis": {
     "zohoApi": {
       "schema": "src/experiments/zoho-api/schema.json",
-      "parent_process": true,
-      "paths": [
-        ["setConnection", "clearConnection", "connectionStatus", "listAccounts", "report", "markJunkSelected"]
-      ]
+      "parent": {
+        "scopes": ["addon_parent"],
+        "paths": [["zohoApi"]],
+        "script": "src/experiments/zoho-api/experimental-api.js"
+      }
     }
   }
 }

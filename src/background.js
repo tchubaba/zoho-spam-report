@@ -31,12 +31,19 @@ async function refreshAccountMap() {
 // Which mailbox a message was delivered to: scan recipients for a mapped email.
 function zohoMatchForMessage(message) {
   const addrs = [];
-  const r = message.recipients || {};
-  for (const bucket of [r.to, r.cc, r.bcc]) {
+  const r = message.recipients;
+  if (Array.isArray(r)) {
+    // TB 160 hands back a flat array of recipient strings
+    for (const entry of r) addrs.push(String(entry || "").toLowerCase());
+  } else if (r) {
+    for (const bucket of [r.to, r.cc, r.bcc]) {
+      for (const entry of bucket || []) addrs.push(String(entry || "").toLowerCase());
+    }
+  }
+  // some versions also expose flat to/cc lists
+  for (const bucket of [message.to, message.cc]) {
     for (const entry of bucket || []) addrs.push(String(entry || "").toLowerCase());
   }
-  // TB Message also exposes a flat list on some versions
-  for (const entry of message.to || []) addrs.push(String(entry || "").toLowerCase());
   for (const addr of addrs) {
     const m = /<([^>]+)>/.exec(addr);
     const email = (m ? m[1] : addr).trim();
@@ -58,9 +65,47 @@ function setActionState(tabId, { enabled, title }) {
 
 const IDLE_TITLE = "Report to Zoho as spam";
 
+function parseIdentityEmail(raw) {
+  const s = String(raw || "").trim().toLowerCase();
+  const m = /<([^>]+)>/.exec(s);
+  return (m ? m[1] : s).trim();
+}
+
+// The options page has no messenger access; it asks us for the identity
+// emails used in the match preview.
+browser.runtime.onMessage.addListener((msg) => {
+  if (!msg || msg.type !== "identityEmails") return undefined;
+  return (async () => {
+    const emails = [];
+    const push = (raw) => {
+      const e = parseIdentityEmail(raw);
+      if (e && !emails.includes(e)) emails.push(e);
+    };
+    try {
+      for (const i of await browser.messenger.identities.list()) push(i.email);
+    } catch (e) {
+      console.warn("messenger.identities.list failed, falling back:", e && e.message);
+      try {
+        const accounts = await browser.accounts.list();
+        for (const a of accounts) for (const idn of a.identities || []) push(idn.email);
+      } catch (e2) {
+        console.warn("accounts.list fallback failed too:", e2 && e2.message);
+      }
+    }
+    return { emails };
+  })();
+});
+
 browser.messageDisplay.onMessageDisplayed.addListener(async (tab, message) => {
   displayedByTab.set(tab.id, message);
   const match = zohoMatchForMessage(message);
+  console.log(
+    "zsr: displayed",
+    JSON.stringify(message.subject),
+    "recipients=", JSON.stringify(message.recipients),
+    "mapSize=", zohoByEmail.size,
+    "match=", match ? match.accountId : null
+  );
   const done = reported.has(message.messageKey);
   setActionState(tab.id, {
     enabled: !!match && !done,
@@ -69,17 +114,23 @@ browser.messageDisplay.onMessageDisplayed.addListener(async (tab, message) => {
 });
 
 browser.messageDisplayAction.onClicked.addListener(async (tab) => {
+  console.log("zsr: clicked tab", tab.id, "tracked=", displayedByTab.has(tab.id));
   const message = displayedByTab.get(tab.id);
-  if (!message || reported.has(message.messageKey)) return;
+  if (!message || reported.has(message.messageKey)) {
+    console.warn("zsr: click ignored (no tracked message or already reported)");
+    return;
+  }
   const match = zohoMatchForMessage(message);
-  if (!match) return;
+  if (!match) {
+    console.warn("zsr: click ignored (recipients matched no Zoho mailbox)");
+    return;
+  }
 
   setActionState(tab.id, { enabled: false, title: "Reporting to Zoho…" });
-
-  // 1) Local junk mark via Thunderbird's own command path (full inheritance).
-  const local = await browser.zohoApi.markJunkSelected();
-
-  // 2) Server-side spam report via the Zoho Mail API.
+  try {
+  // 1) Server-side spam report FIRST: the local junk mark is an IMAP move
+  // that relocates the server-side copy, and the Zoho messageId lookup
+  // expects the message where IMAP sync last left it.
   let dateEpochMs = Number(message.time) || Date.now();
   if (dateEpochMs < 1e12) dateEpochMs *= 1000; // seconds -> ms safety
   const report = await browser.zohoApi.report({
@@ -89,19 +140,26 @@ browser.messageDisplayAction.onClicked.addListener(async (tab) => {
     dateEpochMs,
   });
 
+  // 2) Local junk mark via Thunderbird's own command path (full inheritance),
+  // regardless of whether the Zoho side succeeded.
+  const local = await browser.zohoApi.markJunkSelected();
+  if (!local.ok) console.warn("zsr: local junk mark failed:", local.error);
+
+  console.log("zsr: report=", JSON.stringify(report), "local=", JSON.stringify(local));
   if (report.ok) {
     reported.add(message.messageKey);
-    setActionState(tab.id, { title: "Reported ✓" });
+    setActionState(tab.id, { title: "Reported \u2713" });
   } else if (report.error === "message_not_found") {
-    setActionState(tab.id, { title: "Reported locally; Zoho lookup failed. Retry.", enabled: true});
-    if (!local.ok) console.warn("zoho-spam-report: local junk mark failed:", local.error);
+    setActionState(tab.id, { title: "Marked junk; Zoho lookup failed. Retry.", enabled: true });
   } else {
-    setActionState(tab.id, {
-      title: `Zoho error: ${report.error || "unknown"}`,
-      enabled: true,
-    });
+    console.warn("zsr: zoho report failed:", report.error);
+    setActionState(tab.id, { title: "Marked junk; Zoho error. Retry.", enabled: true });
   }
   setTimeout(() => setActionState(tab.id, { title: IDLE_TITLE }), 5000);
+  } catch (e) {
+    console.error("zsr: click handler threw:", e);
+    setActionState(tab.id, { title: `Error: ${e.message}`, enabled: true });
+  }
 });
 
 // --- lifecycle ---------------------------------------------------------------

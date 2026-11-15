@@ -9,30 +9,76 @@
         "async": true,
         "description": "Hold an access token in memory for a data center ('com', 'eu', 'in', 'com.au', 'com.cn'). In-memory only in the alpha.",
         "parameters": [
-          { "name": "dc", "type": "string" },
-          { "name": "accessToken", "type": "string" },
-          { "name": "expiresInSeconds", "type": "integer", "optional": true }
-        ]
+          {
+            "name": "options",
+            "type": "object",
+            "properties": {
+              "dc": {
+                "type": "string",
+                "optional": true
+              },
+              "accessToken": {
+                "type": "string"
+              },
+              "expiresInSeconds": {
+                "type": "integer",
+                "optional": true
+              }
+            },
+            "required": [
+              "accessToken"
+            ]
+          }
+        ],
+        "returnType": {
+          "type": "object",
+          "additionalProperties": true
+        }
       },
       {
         "name": "clearConnection",
         "type": "function",
         "async": true,
-        "parameters": []
+        "parameters": [],
+        "returnType": {
+          "type": "object",
+          "additionalProperties": true
+        }
       },
       {
         "name": "connectionStatus",
         "type": "function",
         "async": true,
         "parameters": [],
-        "description": "Returns { connected, dc, expiresAt } without exposing the token."
+        "description": "Returns { connected, dc, expiresAt } without exposing the token.",
+        "returnType": {
+          "type": "object",
+          "properties": {
+            "connected": {
+              "type": "boolean"
+            },
+            "dc": {
+              "type": "string",
+              "optional": true
+            },
+            "expiresAt": {
+              "type": "number"
+            }
+          }
+        }
       },
       {
         "name": "listAccounts",
         "type": "function",
         "async": true,
         "parameters": [],
-        "description": "GET /api/accounts -> [{email, accountId}]."
+        "description": "GET /api/accounts -> [{email, accountId}].",
+        "returnType": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
       },
       {
         "name": "report",
@@ -44,22 +90,57 @@
             "name": "details",
             "type": "object",
             "properties": {
-              "accountId": { "type": "string" },
-              "fromAddress": { "type": "string" },
-              "subject": { "type": "string" },
-              "dateEpochMs": { "type": "number" },
-              "internetMessageId": { "type": "string", "optional": true }
+              "accountId": {
+                "type": "string"
+              },
+              "fromAddress": {
+                "type": "string"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "dateEpochMs": {
+                "type": "number"
+              },
+              "internetMessageId": {
+                "type": "string",
+                "optional": true
+              }
             },
-            "required": ["accountId", "fromAddress", "subject", "dateEpochMs"]
+            "required": [
+              "accountId",
+              "fromAddress",
+              "subject",
+              "dateEpochMs"
+            ]
           }
-        ]
+        ],
+        "returnType": {
+          "type": "object",
+          "additionalProperties": true
+        }
       },
       {
         "name": "markJunkSelected",
         "type": "function",
         "async": true,
         "description": "Mark the currently selected message junk in the most recent 3-pane window, inheriting the user's junk settings. Returns { ok, method?, error? }.",
-        "parameters": []
+        "parameters": [],
+        "returnType": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "name": "dumpAccounts",
+        "type": "function",
+        "async": true,
+        "description": "Debug: GET /api/accounts with the raw JSON body returned as a string.",
+        "parameters": [],
+        "returnType": {
+          "type": "object",
+          "additionalProperties": true
+        }
       }
     ]
   }

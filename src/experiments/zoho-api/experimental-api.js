@@ -10,10 +10,12 @@
  *    junk settings (folder moves, keyword, training) apply unchanged.
  */
 
-ChromeUtils.defineESModuleGetters(this, {
-  Services: "resource://gre/modules/Services.sys.mjs",
-});
-Cu.importGlobalProperties(["fetch"]);
+"use strict";
+
+// Services, Cu/Ci/Cc are pre-injected into the parent-process extension sandbox.
+if (!globalThis.fetch) {
+  Cu.importGlobalProperties(["fetch"]);
+}
 
 // --- connection state (in-memory only; alpha) --------------------------------
 const state = {
@@ -71,9 +73,58 @@ async function apiFetch(path, init = {}) {
 }
 
 // --- message matching ---------------------------------------------------------
+// Zoho subjects come back HTML-entity-encoded (&#39;, &amp;, &nbsp;);
+// Thunderbird hands us the decoded MIME header form. Decode before comparing.
+function decodeEntities(value) {
+  let out = String(value || "");
+  for (let round = 0; round < 3; round++) {
+    const next = _decodeOnce(out);
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}
+function _decodeOnce(value) {
+  return String(value).replace(/&(#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[a-zA-Z]+);/g,
+    (all, body) => {
+      if (body[0] === "#") {
+        const cp = body[1] === "x" || body[1] === "X"
+          ? parseInt(body.slice(2), 16)
+          : parseInt(body.slice(1), 10);
+        if (Number.isFinite(cp) && cp >= 0 && cp <= 0x10ffff) {
+          try { return String.fromCodePoint(cp); } catch { return all; }
+        }
+        return all;
+      }
+      const named = {
+        amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00A0",
+        ndash: "\u2013", mdash: "\u2014", hellip: "\u2026",
+        ldquo: "\u201C", rdquo: "\u201D", lsquo: "\u2018", rsquo: "\u2019",
+      };
+      return Object.prototype.hasOwnProperty.call(named, body.toLowerCase())
+        ? named[body.toLowerCase()]
+        : all;
+    });
+}
+
 function stripPrefixes(value) {
-  return String(value || "")
+  return decodeEntities(value)
+    // typographic lookalikes next: Zoho's decoding and TB's MIME decoding
+    // can disagree on curly quotes, dashes, and non-breaking spaces
+    .normalize("NFKD")
+    .replace(/[\u2018\u2019\u201B\u02BC\u00B4`]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2010-\u2015\u2212]/g, "-")
+    .replace(/[\u00A0\u2000-\u200B\u202F\uFEFF]/g, " ")
+    // junk mailers pad subjects with zero-width and emoji decoration
+    .replace(/[\u200C-\u200F\u2060-\u2064]/g, "")
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F]/gu, "")
+    // marketing padding brackets around the real subject
+    .replace(/^[\[(<{|]\s*/, "")
+    .replace(/\s*[\])>}|]$/, "")
     .replace(/^(?:(?:re|fwd?|fw):\s*)+/gi, "")
+    .replace(/^[\[(<{|]\s*/, "")
+    .replace(/\s*[\])>}|]$/, "")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
@@ -90,7 +141,7 @@ const byDateDistance = (dateEpochMs) => (a, b) =>
 
 async function findMessageId(details) {
   const recent = await apiFetch(
-    `/api/accounts/${details.accountId}/messages/view?limit=50&sortBy=date&sortorder=false`
+    `/api/accounts/${details.accountId}/messages/view?limit=100&sortBy=date&sortorder=false`
   );
   const messages = recent?.data || [];
   const from = emailOf(details.fromAddress);
@@ -111,11 +162,25 @@ async function findMessageId(details) {
   );
   if (loose.length) return String(loose.sort(byDateDistance(details.dateEpochMs))[0].messageId);
 
+  console.warn(
+    "zohoApi.findMessageId: no match. looking for",
+    JSON.stringify({ from, subject, dateEpochMs: details.dateEpochMs }),
+    "in", messages.length, "recent entries; closest by sender:",
+    JSON.stringify(
+      messages
+        .filter((m) => emailOf(m.fromAddress) === from)
+        .slice(0, 5)
+        .map((m) => ({ subject: m.subject, receivedTime: m.receivedTime, folderId: m.folderId }))
+    )
+  );
   return null;
 }
 
 // --- experiment API surface ----------------------------------------------------
-class ZohoApiAPI extends ExtensionAPI {
+// Naming contract: the sandbox global holding the ExtensionAPI subclass must be
+// named exactly like the namespace (zohoApi), matching the manifest
+// experiment_apis.zohoApi.parent.paths entry ["zohoApi"].
+var zohoApi = class extends ExtensionCommon.ExtensionAPI {
   getAPI() {
     return {
       zohoApi: {
@@ -146,16 +211,48 @@ class ZohoApiAPI extends ExtensionAPI {
         async listAccounts() {
           const body = await apiFetch("/api/accounts");
           const out = [];
-          for (const a of body?.data || []) {
-            const accountId = String(a.accountId);
-            const primary = String(a.email || "").toLowerCase();
-            if (primary) out.push({ email: primary, accountId });
-            for (const alias of a.emailAliases || []) {
-              const email = String(alias.email || "").toLowerCase();
-              if (email) out.push({ email, accountId });
+          const add = (email, accountId) => {
+            const e = String(email || "").toLowerCase();
+            const id = String(accountId || "");
+            if (e && id && !out.some((x) => x.email === e)) {
+              out.push({ email: e, accountId: id });
+            }
+          };
+          // One entry per hosted mailbox. Hosted addresses are EXACTLY
+          //   primaryEmailAddress + emailAlias[] (plain strings).
+          // emailAddress[] additionally contains attached-but-not-hosted
+          // addresses (recovery or alternate logins for the Zoho user) and
+          // must NOT be treated as mailboxes.
+          for (const entry of body?.data || []) {
+            add(entry.primaryEmailAddress, entry.accountId);
+            for (const alias of entry.emailAlias || []) {
+              add(alias, entry.accountId);
+            }
+            // entries without primaryEmailAddress (older API variants)
+            if (!entry.primaryEmailAddress) {
+              add(entry.mailboxAddress || entry.incomingUserName, entry.accountId);
             }
           }
+          if (!out.length) {
+            console.warn(
+              "zohoApi.listAccounts: unrecognized /api/accounts shape:",
+              JSON.stringify(body).slice(0, 400)
+            );
+          }
           return out;
+        },
+
+        async dumpAccounts() {
+          try {
+            const resp = await fetch(dcHost(state.dc) + "/api/accounts", {
+              method: "GET",
+              headers: apiHeaders(),
+            });
+            const text = await resp.text();
+            return { ok: true, status: resp.status, body: text };
+          } catch (e) {
+            return { ok: false, error: String(e) };
+          }
         },
 
         async report(details) {

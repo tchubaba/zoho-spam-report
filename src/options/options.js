@@ -6,6 +6,22 @@
 
 const $ = (id) => document.getElementById(id);
 
+// Thunderbird identity.email may be "Display Name <addr@x.y>"; accept both forms.
+function parseEmail(raw) {
+  const s = String(raw || "").trim().toLowerCase();
+  if (!s) return "";
+  const m = s.match(/<([^>]+)>/);
+  return (m ? m[1] : s).trim();
+}
+
+async function safeSet(obj) {
+  try {
+    await browser.storage.local.set(obj);
+  } catch (e) {
+    console.warn("storage unavailable:", e.message);
+  }
+}
+
 function fmt(expiresAt) {
   if (!expiresAt) return "";
   const left = Math.max(0, Math.round((expiresAt - Date.now()) / 60000));
@@ -13,7 +29,15 @@ function fmt(expiresAt) {
 }
 
 async function renderStatus() {
-  const status = await browser.zohoApi.connectionStatus();
+  let status;
+  try {
+    status = await browser.zohoApi.connectionStatus();
+  } catch (e) {
+    const el = $("status");
+    el.textContent = `Error from zohoApi.connectionStatus: ${e.message}`;
+    el.className = "status err";
+    return { connected: false };
+  }
   const el = $("status");
   if (status.connected) {
     el.textContent = `Connected to Zoho (${status.dc})${fmt(status.expiresAt)}.`;
@@ -50,10 +74,10 @@ async function renderAccounts() {
   // Thunderbird identity emails for match preview
   let tbEmails = new Set();
   try {
-    const identities = await browser.messenger.identities.list();
-    for (const i of identities) tbEmails.add(String(i.email || "").toLowerCase());
+    const resp = await browser.runtime.sendMessage({ type: "identityEmails" });
+    for (const e of (resp && resp.emails) || []) tbEmails.add(e);
   } catch (e) {
-    console.warn("identities.list() failed:", e);
+    console.warn("identityEmails request failed:", e);
   }
 
   for (const acc of zoho) {
@@ -75,25 +99,58 @@ async function renderAccounts() {
 }
 
 $("save").addEventListener("click", async () => {
-  const result = await browser.zohoApi.setConnection({
-    dc: $("dc").value,
-    accessToken: $("token").value,
-    expiresInSeconds: Number($("expires").value) || 3600,
-  });
+  let result;
+  try {
+    result = await browser.zohoApi.setConnection({
+      dc: $("dc").value,
+      accessToken: $("token").value,
+      expiresInSeconds: Number($("expires").value) || 3600,
+    });
+  } catch (e) {
+    const el = $("status");
+    el.textContent = `Error from zohoApi.setConnection: ${e.message}`;
+    el.className = "status err";
+    return;
+  }
+  if (!result || !result.ok) {
+    const el = $("status");
+    el.textContent = `setConnection failed: ${result ? result.error : "no result returned"}`;
+    el.className = "status err";
+    return;
+  }
   if (result.ok) {
     $("token").value = "";
-    // nudge the background script to rebuild its account map
-    await browser.storage.local.set({ connectionPulse: Date.now() });
+    // nudge the background script to rebuild its account map (never fatal)
+    await safeSet({ connectionPulse: Date.now() });
   }
   await renderStatus();
   await renderAccounts();
 });
 
+$("dump-btn").addEventListener("click", async () => {
+  const pre = $("raw-dump");
+  try {
+    const r = await browser.zohoApi.dumpAccounts();
+    pre.textContent = r.ok
+      ? `HTTP ${r.status}\n${JSON.stringify(JSON.parse(r.body), null, 2)}`
+      : `error: ${r.error}`;
+  } catch (e) {
+    pre.textContent = `error: ${e.message}`;
+  }
+  pre.hidden = false;
+});
+
 $("clear").addEventListener("click", async () => {
   await browser.zohoApi.clearConnection();
-  await browser.storage.local.set({ connectionPulse: Date.now() });
+  await safeSet({ connectionPulse: Date.now() });
   await renderStatus();
   await renderAccounts();
+});
+
+window.addEventListener("error", (ev) => {
+  const el = $("status");
+  el.textContent = `Error: ${ev.message}`;
+  el.className = "status err";
 });
 
 (async function init() {
@@ -104,6 +161,6 @@ $("clear").addEventListener("click", async () => {
     await renderAccounts();
   }
   $("dc").addEventListener("change", async (e) => {
-    await browser.storage.local.set({ lastDc: e.target.value });
+    await safeSet({ lastDc: e.target.value });
   });
 })();
