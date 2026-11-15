@@ -15,7 +15,7 @@ const reported = new Map();
 // Prefer the RFC Message-ID header: stable across folder moves (an IMAP move
 // re-homes the message, changing folder and local id).
 function dedupeKey(message) {
-  const rfc = message.header?.messageId || message.messageId;
+  const rfc = message.headerMessageId || message.header?.messageId || message.messageId;
   if (rfc) return `m:${String(rfc).trim()}`;
   const acc = message.account?.id || "";
   const folder = message.folder?.path || message.folder?.name || "";
@@ -31,6 +31,26 @@ function isInJunkFolder(message) {
   const name = String(f.path || f.name || "").toLowerCase();
   return /(^|\/)(spam|junk)$/.test(name);
 }
+function headerValue(header, name) {
+  if (!header) return "";
+  if (typeof header.get === "function") {
+    const v = header.get(name) || header.get(name.toLowerCase()) ||
+      header.get(name.toUpperCase());
+    if (v) return String(v);
+  }
+  return String(header[name] || header[name.toLowerCase()] ||
+    header[name.toUpperCase()] || "");
+}
+
+// Thunderbird exposes the RFC Message-ID of the displayed message as
+// headerMessageId (the msg-db header id); "0" means the message has none.
+async function getRfcMessageId(message) {
+  const direct = message.headerMessageId ||
+    headerValue(message.header, "message-id") || "";
+  if (direct && direct !== "0") return String(direct).trim();
+  return "";
+}
+
 const displayedByTab = new Map();    // tabId -> last displayed message
 let zohoByEmail = new Map();         // lowercase identity email -> {accountId}
 
@@ -74,11 +94,14 @@ function zohoMatchForMessage(message) {
   return null;
 }
 
-function setActionState(tabId, { enabled, title }) {
+function setActionState(tabId, { enabled, title, label }) {
   try {
     if (title !== undefined) {
       browser.messageDisplayAction.setTitle({ tabId, title });
     }
+    // The label is what the button prints; the title is only the tooltip.
+    // Clearing the label (null) falls back to the title.
+    browser.messageDisplayAction.setLabel({ tabId, label: label ?? null });
     if (enabled !== undefined) {
       browser.messageDisplayAction.setEnabled({ tabId, enabled });
     }
@@ -132,12 +155,22 @@ browser.messageDisplay.onMessageDisplayed.addListener(async (tab, message) => {
   const inJunk = isInJunkFolder(message);
   const wantMode = inJunk ? "markNotSpam" : "moveToSpam";
   const done = reported.get(dedupeKey(message)) === wantMode;
-  setActionState(tab.id, {
-    enabled: !!match && !done,
-    title: done
-      ? (inJunk ? "Already reported as not spam" : "Already reported to Zoho")
-      : (inJunk ? NOT_SPAM_TITLE : IDLE_TITLE),
-  });
+  // messageDisplayAction has no show/hide in Thunderbird (checked against
+  // the TB 160 schema); an ineligible message gets a disabled button with a
+  // short label on the button itself and the full explanation on hover.
+  let title, label;
+  if (!match) {
+    title = zohoByEmail.size
+      ? "No connected Zoho mailbox serves this message"
+      : "Zoho not connected (see add-on options)";
+    label = "No Zoho mailbox";
+  } else if (done) {
+    title = label = inJunk
+      ? "Already reported as not spam" : "Already reported to Zoho";
+  } else {
+    title = label = inJunk ? NOT_SPAM_TITLE : IDLE_TITLE;
+  }
+  setActionState(tab.id, { enabled: !!match && !done, title, label });
 });
 
 browser.messageDisplayAction.onClicked.addListener(async (tab) => {
@@ -166,6 +199,8 @@ browser.messageDisplayAction.onClicked.addListener(async (tab) => {
   // expects the message where IMAP sync last left it.
   let dateEpochMs = Number(message.time) || Date.now();
   if (dateEpochMs < 1e12) dateEpochMs *= 1000; // seconds -> ms safety
+  const rfcId = await getRfcMessageId(message);
+  console.log("zsr: rfc message id:", rfcId ? "present" : "MISSING (header unavailable)");
   const report = await browser.zohoApi.report({
     accountId: match.accountId,
     fromAddress: message.author,
@@ -173,6 +208,7 @@ browser.messageDisplayAction.onClicked.addListener(async (tab) => {
     dateEpochMs,
     mode,
     inJunk,
+    internetMessageId: rfcId,
   });
 
   // 2) Local junk mark via Thunderbird's own command path (full inheritance),
@@ -199,8 +235,27 @@ browser.messageDisplayAction.onClicked.addListener(async (tab) => {
 });
 
 // --- lifecycle ---------------------------------------------------------------
-browser.runtime.onStartup.addListener(refreshAccountMap);
-refreshAccountMap();
+// OAuth client id/secret live in zoho-client.json at the add-on root; the
+// extension's own pages can always fetch their own resources.
+async function loadZohoClientConfig() {
+  try {
+    const resp = await fetch(browser.runtime.getURL("zoho-client.json"));
+    if (!resp.ok) return;
+    const cfg = await resp.json();
+    if (cfg && cfg.clientId && cfg.clientSecret) {
+      await browser.zohoApi.setClientConfig(cfg);
+    }
+  } catch (e) {
+    console.warn("zoho-spam-report: zoho-client.json not loaded:", e && e.message);
+  }
+}
+
+const clientConfigReady = loadZohoClientConfig();
+browser.runtime.onStartup.addListener(async () => {
+  await clientConfigReady;
+  refreshAccountMap();
+});
+clientConfigReady.then(refreshAccountMap);
 
 // Options page bumps this after (re)moving the connection.
 browser.storage.local.onChanged.addListener((changes) => {

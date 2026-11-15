@@ -15,7 +15,9 @@
     "storage"
   ],
   "background": {
-    "scripts": ["src/background.js"]
+    "scripts": [
+      "src/background.js"
+    ]
   },
   "options_ui": {
     "page": "src/options/options.html",
@@ -28,8 +30,14 @@
     "zohoApi": {
       "schema": "src/experiments/zoho-api/schema.json",
       "parent": {
-        "scopes": ["addon_parent"],
-        "paths": [["zohoApi"]],
+        "scopes": [
+          "addon_parent"
+        ],
+        "paths": [
+          [
+            "zohoApi"
+          ]
+        ],
         "script": "src/experiments/zoho-api/experimental-api.js"
       }
     }

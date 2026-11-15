@@ -8,6 +8,27 @@ Format based on [Keep a Changelog](https://keepachangelog.com/), versioning per
 
 ### Added
 - Project skeleton.
+- One-click **Connect Zoho**: OAuth consent opens in the system browser and the
+  extension receives the redirect on loopback port 8642. The refresh token is
+  kept in Thunderbird's built-in password manager; access tokens stay in memory
+  and renew automatically before expiry. Connections survive restarts.
+  `prompt=consent` guarantees Zoho issues a fresh refresh token even for an
+  app that was authorized before.
+- Disconnect removes the local entry and revokes the refresh token at Zoho
+  (`oauth/v2/revoke/token`), so the grant is gone server-side too.
+- Message resolution now prefers exact RFC Message-Id matching: candidates
+  are pre-filtered by sender and time proximity, then confirmed against the
+  `Message-Id` header of each; sender+subject matching is the fallback.
+- On messages from accounts no connected Zoho user serves, the button is
+  disabled and labeled "No Zoho mailbox" (full explanation on hover) rather
+  than looking clickable (Thunderbird offers no way to hide a
+  message-display button per message).
+- Multiple Zoho users can be connected at once; mailboxes from all connected
+  users merge into the button eligibility map. Each connection has a
+  Disconnect action in the options page.
+- `zoho-client.example.json`, `docs/zoho-oauth-client.md`, and a gitignored
+  `zoho-client.json` slot for the OAuth client credentials.
+- Manual access-token paste moved to an advanced section of the options page.
 - Message-display report button with Zoho account auto-detection, native junk
   marking plus server-side `moveToSpam` report, message-id resolution,
   per-session dedupe, options page setup, and an access-token guide.

@@ -13,17 +13,12 @@
   <div id="status" class="status"></div>
 
   <section id="connection">
-    <h2>Alpha setup</h2>
+    <h2>Zoho accounts</h2>
     <p class="note">
-      Alpha setup: paste a Zoho Mail <strong>access token</strong> and it is held in
-      memory for this Thunderbird session. Nothing is written to disk, and it is
-      gone when Thunderbird restarts.
-    </p>
-    <p class="note">
-      Get an access token from the Zoho Mail API with any OAuth client that has
-      <code>ZohoMail.accounts.READ</code>, <code>ZohoMail.messages.READ</code> and
-      <code>ZohoMail.messages.UPDATE</code> scopes; see
-      <code>docs/getting-an-access-token.md</code>.
+      Connect a Zoho Mail user once. The refresh token is stored in Thunderbird's
+      built-in password manager and access tokens renew automatically. You can
+      connect more than one Zoho user; mailboxes from all of them get the
+      report buttons.
     </p>
 
     <label for="dc">Data center</label>
@@ -35,17 +30,13 @@
       <option value="com.cn">zoho.com.cn</option>
     </select>
 
-    <label for="token">Access token</label>
-    <textarea id="token" rows="3" placeholder="Paste access_token here"
-              autocomplete="off" spellcheck="false"></textarea>
-
-    <label for="expires">Token lifetime (seconds)</label>
-    <input id="expires" type="number" value="3600" min="60" max="86400">
-
     <div class="actions">
-      <button id="save" type="button">Use token</button>
-      <button id="clear" type="button">Forget token</button>
+      <button id="connect-btn" type="button">Connect Zoho</button>
+      <button id="connect-cancel" type="button" hidden>Cancel</button>
     </div>
+    <p id="connect-progress" class="note" hidden></p>
+
+    <ul id="connection-list" class="account-list"></ul>
   </section>
 
   <section id="accounts">
@@ -53,8 +44,8 @@
   <button id="dump-btn" class="ghost" title="Raw GET /api/accounts JSON for debugging">dump raw JSON</button>
 </h2>
 <pre id="raw-dump" class="raw-dump" hidden></pre>
-    <p class="note">Mailboxes your token can reach. Messages delivered to these
-       addresses get the "Report to Zoho as spam" button.</p>
+    <p class="note">Mailboxes the connected accounts can reach. Messages
+      delivered to these addresses get the report buttons.</p>
     <ul id="account-list" class="account-list"></ul>
   </section>
 
@@ -63,6 +54,25 @@
     <p class="note">Which of these map to accounts configured in Thunderbird.</p>
     <ul id="match-list" class="account-list"></ul>
   </section>
+
+  <details id="manual-details">
+    <summary>Advanced: use a manually obtained access token</summary>
+    <p class="note">
+      Alternative to the Connect button, for testing. Paste a Zoho Mail
+      <strong>access token</strong>; it is held in memory for this Thunderbird
+      session only, nothing is written to disk, and it is gone when Thunderbird
+      restarts. See <code>docs/getting-an-access-token.md</code>.
+    </p>
+    <label for="token">Access token</label>
+    <textarea id="token" rows="3" placeholder="Paste access_token here"
+              autocomplete="off" spellcheck="false"></textarea>
+    <label for="expires">Token lifetime (seconds)</label>
+    <input id="expires" type="number" value="3600" min="60" max="86400">
+    <div class="actions">
+      <button id="save" type="button">Use token</button>
+      <button id="clear" type="button">Forget token</button>
+    </div>
+  </details>
 
   <script src="options.js"></script>
 </body>

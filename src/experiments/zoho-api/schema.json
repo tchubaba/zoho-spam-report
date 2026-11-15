@@ -1,7 +1,7 @@
 [
   {
     "namespace": "zohoApi",
-    "description": "Privileged Zoho Mail API client (alpha: in-memory access token, nothing persisted) plus native junk-marking. Unofficial; not affiliated with Zoho.",
+    "description": "Privileged Zoho Mail API client: OAuth connect flow (loopback callback, refresh token in Thunderbird's password manager, access token in memory), plus native junk-marking. Unofficial; not affiliated with Zoho.",
     "functions": [
       {
         "name": "setConnection",
@@ -46,25 +46,126 @@
         }
       },
       {
+        "name": "setClientConfig",
+        "type": "function",
+        "async": true,
+        "description": "Provide the OAuth client id/secret (read by the extension pages from zoho-client.json).",
+        "parameters": [
+          {
+            "name": "options",
+            "type": "object",
+            "properties": {
+              "clientId": {
+                "type": "string"
+              },
+              "clientSecret": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "clientId",
+              "clientSecret"
+            ]
+          }
+        ],
+        "returnType": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "name": "connect",
+        "type": "function",
+        "async": true,
+        "description": "Start the one-click OAuth flow: open the Zoho consent page in the system browser and listen on a loopback port for the redirect. Poll connectState for progress.",
+        "parameters": [
+          {
+            "name": "options",
+            "type": "object",
+            "optional": true,
+            "properties": {
+              "dc": {
+                "type": "string",
+                "optional": true
+              }
+            }
+          }
+        ],
+        "returnType": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "name": "connectState",
+        "type": "function",
+        "async": true,
+        "description": "Poll the in-flight connect: { status: 'idle' | 'waiting' | 'done' | 'error', message? }.",
+        "parameters": [],
+        "returnType": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "name": "connectCancel",
+        "type": "function",
+        "async": true,
+        "parameters": [],
+        "returnType": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "name": "listConnections",
+        "type": "function",
+        "async": true,
+        "description": "All connected Zoho users: [{ id, dc, username, stored, accounts: [{email, accountId}], error? }].",
+        "parameters": [],
+        "returnType": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      {
+        "name": "disconnect",
+        "type": "function",
+        "async": true,
+        "description": "Remove a stored connection: delete its refresh token from the password manager and drop it from memory.",
+        "parameters": [
+          {
+            "name": "options",
+            "type": "object",
+            "properties": {
+              "dc": {
+                "type": "string",
+                "optional": true
+              },
+              "username": {
+                "type": "string",
+                "optional": true
+              }
+            }
+          }
+        ],
+        "returnType": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
         "name": "connectionStatus",
         "type": "function",
         "async": true,
         "parameters": [],
-        "description": "Returns { connected, dc, expiresAt } without exposing the token.",
+        "description": "True when at least one connection is live or renewable. Does not expose tokens.",
         "returnType": {
           "type": "object",
-          "properties": {
-            "connected": {
-              "type": "boolean"
-            },
-            "dc": {
-              "type": "string",
-              "optional": true
-            },
-            "expiresAt": {
-              "type": "number"
-            }
-          }
+          "additionalProperties": true
         }
       },
       {

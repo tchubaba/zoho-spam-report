@@ -20,7 +20,10 @@ Zoho's own filter learns.
 
 1. Click **Report to Zoho as spam** on a message in Thunderbird. The button is
    offered on messages delivered to mailboxes reachable by your connected Zoho
-   token (accounts are detected automatically).
+   users (connect one or more; mailboxes are detected automatically). On
+   messages that do not match, the button shows as unavailable: Thunderbird's
+   message-display API can disable and relabel the button, but not remove it
+   from the toolbar.
 2. The extension resolves the message to Zoho's internal message id and calls
    the Zoho Mail API's update-message endpoint in `moveToSpam` mode.
 3. Thunderbird's native junk marking follows. Your existing junk
@@ -42,7 +45,10 @@ not-junk marking follows.
 - Minimum OAuth scopes only: list your mailboxes, read message metadata to
   locate the message you clicked, list folders to resolve the Spam folder for
   not-spam reports, and apply the report.
-- The alpha holds the access token in memory only; nothing is written to disk.
+- Connecting once stores a refresh token in Thunderbird's own password manager;
+  access tokens live in memory and renew automatically. One-click sign-in
+  happens in your system browser against Zoho's own login pages, with the
+  callback received on a loopback port. You can disconnect at any time.
 - See [PRIVACY.md](PRIVACY.md).
 
 ## Requirements
@@ -53,7 +59,8 @@ not-junk marking follows.
 
 ## Documentation
 
-- [Alpha setup: getting an access token](docs/getting-an-access-token.md)
+- [Connect flow and OAuth client setup](docs/zoho-oauth-client.md)
+- [Manual access token path (testing)](docs/getting-an-access-token.md)
 - [Architecture and API usage](docs/architecture.md)
 
 ## License

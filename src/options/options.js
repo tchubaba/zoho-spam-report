@@ -1,6 +1,8 @@
 /* Zoho Spam Report: options page
- * Token paste -> zohoApi.setConnection (in-memory), connection status,
- * detected Zoho mailboxes, and Thunderbird identity matching preview.
+ * One-click OAuth connect (loopback callback handled by the experiment),
+ * connected-user list with disconnect, detected Zoho mailboxes, and
+ * Thunderbird identity matching preview. Manual token paste kept as an
+ * advanced fallback.
  */
 "use strict";
 
@@ -22,32 +24,137 @@ async function safeSet(obj) {
   }
 }
 
-function fmt(expiresAt) {
-  if (!expiresAt) return "";
-  const left = Math.max(0, Math.round((expiresAt - Date.now()) / 60000));
-  return ` (expires in ~${left} min)`;
+function setStatus(text, cls) {
+  const el = $("status");
+  el.textContent = text;
+  el.className = `status ${cls}`;
 }
 
 async function renderStatus() {
-  let status;
+  let conns;
   try {
-    status = await browser.zohoApi.connectionStatus();
+    conns = await browser.zohoApi.listConnections();
   } catch (e) {
-    const el = $("status");
-    el.textContent = `Error from zohoApi.connectionStatus: ${e.message}`;
-    el.className = "status err";
-    return { connected: false };
+    setStatus(`Error from zohoApi.listConnections: ${e.message}`, "err");
+    return { connected: false, conns: [] };
   }
-  const el = $("status");
-  if (status.connected) {
-    el.textContent = `Connected to Zoho (${status.dc})${fmt(status.expiresAt)}.`;
-    el.className = "status ok";
+  if (!conns.length) {
+    setStatus("Not connected. Choose a data center and press Connect Zoho.", "warn");
   } else {
-    el.textContent = "Not connected. Paste an access token below.";
-    el.className = "status warn";
+    const users = conns.filter((c) => c.stored).map((c) => c.username);
+    const parts = [];
+    if (users.length) parts.push(`${users.length} Zoho user${users.length > 1 ? "s" : ""}`);
+    if (conns.some((c) => !c.stored)) parts.push("a manual token");
+    setStatus(`Connected: ${parts.join(" and ")}. Access tokens renew automatically.`, "ok");
   }
-  return status;
+  return { connected: conns.length > 0, conns };
 }
+
+async function renderConnections() {
+  const list = $("connection-list");
+  list.textContent = "";
+  let conns;
+  try {
+    conns = await browser.zohoApi.listConnections();
+  } catch (e) {
+    const li = document.createElement("li");
+    li.className = "err";
+    li.textContent = `Could not list connections: ${e.message}`;
+    list.append(li);
+    return;
+  }
+  for (const conn of conns) {
+    const li = document.createElement("li");
+    const label = conn.stored
+      ? `${conn.username} (${conn.dc})`
+      : "manual token (this session only)";
+    li.textContent = label;
+    if (conn.error) {
+      li.className = "warn";
+      li.textContent = `${label} - token needs reconnecting (${conn.error})`;
+    }
+    if (conn.stored) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "ghost";
+      btn.textContent = "Disconnect";
+      btn.addEventListener("click", async () => {
+        await browser.zohoApi.disconnect({ dc: conn.dc, username: conn.username });
+        await safeSet({ connectionPulse: Date.now() });
+        await renderStatus();
+        await renderConnections();
+        await renderAccounts();
+      });
+      li.append(" ", btn);
+    }
+    list.append(li);
+  }
+}
+
+let polling = null;
+
+function setConnectUI({ busy, message }) {
+  $("connect-btn").disabled = Boolean(busy);
+  $("connect-cancel").hidden = !busy;
+  const p = $("connect-progress");
+  p.hidden = !message;
+  p.textContent = message || "";
+}
+
+async function finishConnectPolling({ keepStatus = false } = {}) {
+  if (polling) { clearInterval(polling); polling = null; }
+  setConnectUI({ busy: false, message: "" });
+  await safeSet({ connectionPulse: Date.now() });
+  if (!keepStatus) {
+    await renderStatus();
+  }
+  await renderConnections();
+  await renderAccounts();
+}
+
+$("connect-btn").addEventListener("click", async () => {
+  let result;
+  try {
+    result = await browser.zohoApi.connect({ dc: $("dc").value });
+  } catch (e) {
+    setStatus(`Error from zohoApi.connect: ${e.message}`, "err");
+    return;
+  }
+  if (!result || !result.ok) {
+    setStatus(`Connect failed: ${result ? result.error : "no result returned"}`, "err");
+    return;
+  }
+  setConnectUI({
+    busy: true,
+    message: "Complete sign-in in the browser tab that just opened. " +
+      "Zoho will redirect back to this computer; this page updates on its own.",
+  });
+  polling = setInterval(async () => {
+    let st;
+    try {
+      st = await browser.zohoApi.connectState();
+    } catch (e) {
+      setConnectUI({ busy: false, message: "" });
+      setStatus(`Connect polling error: ${e.message}`, "err");
+      return;
+    }
+    if (st.status === "waiting") return;
+    if (st.status === "done") {
+      setStatus(`Connected: ${st.message}`, "ok");
+      await finishConnectPolling();
+    } else if (st.status === "error") {
+      setStatus(`Connect failed: ${st.message}`, "err");
+      await finishConnectPolling({ keepStatus: true });
+    } else {
+      await finishConnectPolling();
+    }
+  }, 800);
+});
+
+$("connect-cancel").addEventListener("click", async () => {
+  await browser.zohoApi.connectCancel();
+  await finishConnectPolling();
+});
 
 async function renderAccounts() {
   const list = $("account-list");
@@ -66,7 +173,7 @@ async function renderAccounts() {
   }
   if (!zoho.length) {
     const li = document.createElement("li");
-    li.textContent = "No mailboxes visible to this token.";
+    li.textContent = "No mailboxes visible to the connected accounts.";
     list.append(li);
     return;
   }
@@ -107,15 +214,11 @@ $("save").addEventListener("click", async () => {
       expiresInSeconds: Number($("expires").value) || 3600,
     });
   } catch (e) {
-    const el = $("status");
-    el.textContent = `Error from zohoApi.setConnection: ${e.message}`;
-    el.className = "status err";
+    setStatus(`Error from zohoApi.setConnection: ${e.message}`, "err");
     return;
   }
   if (!result || !result.ok) {
-    const el = $("status");
-    el.textContent = `setConnection failed: ${result ? result.error : "no result returned"}`;
-    el.className = "status err";
+    setStatus(`setConnection failed: ${result ? result.error : "no result returned"}`, "err");
     return;
   }
   if (result.ok) {
@@ -124,6 +227,7 @@ $("save").addEventListener("click", async () => {
     await safeSet({ connectionPulse: Date.now() });
   }
   await renderStatus();
+  await renderConnections();
   await renderAccounts();
 });
 
@@ -144,20 +248,33 @@ $("clear").addEventListener("click", async () => {
   await browser.zohoApi.clearConnection();
   await safeSet({ connectionPulse: Date.now() });
   await renderStatus();
+  await renderConnections();
   await renderAccounts();
 });
 
 window.addEventListener("error", (ev) => {
-  const el = $("status");
-  el.textContent = `Error: ${ev.message}`;
-  el.className = "status err";
+  setStatus(`Error: ${ev.message}`, "err");
 });
 
 (async function init() {
+  // Load the OAuth client config (add-on-root zoho-client.json) before anything
+  // can connect or refresh tokens.
+  try {
+    const resp = await fetch(browser.runtime.getURL("zoho-client.json"));
+    if (resp.ok) {
+      const cfg = await resp.json();
+      if (cfg && cfg.clientId && cfg.clientSecret) {
+        await browser.zohoApi.setClientConfig(cfg);
+      }
+    }
+  } catch (e) {
+    console.warn("zoho-client.json not loaded:", e.message);
+  }
+  const saved = await browser.storage.local.get("lastDc");
+  if (saved.lastDc) $("dc").value = saved.lastDc;
   const status = await renderStatus();
+  await renderConnections();
   if (status.connected) {
-    const saved = await browser.storage.local.get("lastDc");
-    if (saved.lastDc) $("dc").value = saved.lastDc;
     await renderAccounts();
   }
   $("dc").addEventListener("change", async (e) => {
