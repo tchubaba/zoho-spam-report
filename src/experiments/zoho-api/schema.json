@@ -105,6 +105,16 @@
               "internetMessageId": {
                 "type": "string",
                 "optional": true
+              },
+              "mode": {
+                "type": "string",
+                "optional": true,
+                "description": "'moveToSpam' (default) or 'markNotSpam'."
+              },
+              "inJunk": {
+                "type": "boolean",
+                "optional": true,
+                "description": "True when the message currently sits in a junk folder; widens the messageId lookup to Zoho's Spam folder."
               }
             },
             "required": [
@@ -125,7 +135,20 @@
         "type": "function",
         "async": true,
         "description": "Mark the currently selected message junk in the most recent 3-pane window, inheriting the user's junk settings. Returns { ok, method?, error? }.",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "options",
+            "type": "object",
+            "optional": true,
+            "properties": {
+              "notJunk": {
+                "type": "boolean",
+                "optional": true,
+                "description": "Mark not junk instead of junk."
+              }
+            }
+          }
+        ],
         "returnType": {
           "type": "object",
           "additionalProperties": true

@@ -42,7 +42,8 @@ connection changes. Each message can be reported once per Thunderbird session.
 |---|---|---|
 | `GET /api/accounts` | list reachable mailboxes (`email`, `accountId`, aliases) | `ZohoMail.accounts.READ` |
 | `GET /api/accounts/{id}/messages/view` | recent messages for resolution | `ZohoMail.messages.READ` |
-| `PUT /api/accounts/{id}/updatemessage` | the `moveToSpam` report | `ZohoMail.messages.UPDATE` |
+| `PUT /api/accounts/{id}/updatemessage` | the `moveToSpam`/`markNotSpam` report | `ZohoMail.messages.UPDATE` |
+| `GET /api/accounts/{id}/folders` | resolve the Spam folder id for not-spam reports | `ZohoMail.folders.READ` |
 
 Every call sends the header `Authorization: Zoho-oauthtoken <token>` and uses
 the API host matching the account's data center: `mail.zoho.com`, `.eu`, `.in`,

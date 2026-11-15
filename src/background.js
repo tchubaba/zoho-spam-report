@@ -8,7 +8,29 @@
  */
 "use strict";
 
-const reported = new Set();          // messageKey dedupe (session-scoped, alpha)
+// key: stable message id -> value: the mode already sent ("moveToSpam" or
+// "markNotSpam"). Session-scoped in the alpha.
+const reported = new Map();
+
+// Prefer the RFC Message-ID header: stable across folder moves (an IMAP move
+// re-homes the message, changing folder and local id).
+function dedupeKey(message) {
+  const rfc = message.header?.messageId || message.messageId;
+  if (rfc) return `m:${String(rfc).trim()}`;
+  const acc = message.account?.id || "";
+  const folder = message.folder?.path || message.folder?.name || "";
+  const id = message.id ?? `${message.subject}|${message.author}|${message.time}`;
+  return `a:${acc}|${folder}|${id}`;
+}
+
+// Is the displayed message in a junk folder? folder.type is authoritative
+// (special-use flag); the name check covers accounts without one.
+function isInJunkFolder(message) {
+  const f = message.folder || {};
+  if (f.type === "junk") return true;
+  const name = String(f.path || f.name || "").toLowerCase();
+  return /(^|\/)(spam|junk)$/.test(name);
+}
 const displayedByTab = new Map();    // tabId -> last displayed message
 let zohoByEmail = new Map();         // lowercase identity email -> {accountId}
 
@@ -64,6 +86,7 @@ function setActionState(tabId, { enabled, title }) {
 }
 
 const IDLE_TITLE = "Report to Zoho as spam";
+const NOT_SPAM_TITLE = "Report to Zoho as not spam";
 
 function parseIdentityEmail(raw) {
   const s = String(raw || "").trim().toLowerCase();
@@ -106,17 +129,21 @@ browser.messageDisplay.onMessageDisplayed.addListener(async (tab, message) => {
     "mapSize=", zohoByEmail.size,
     "match=", match ? match.accountId : null
   );
-  const done = reported.has(message.messageKey);
+  const inJunk = isInJunkFolder(message);
+  const wantMode = inJunk ? "markNotSpam" : "moveToSpam";
+  const done = reported.get(dedupeKey(message)) === wantMode;
   setActionState(tab.id, {
     enabled: !!match && !done,
-    title: done ? "Already reported to Zoho" : IDLE_TITLE,
+    title: done
+      ? (inJunk ? "Already reported as not spam" : "Already reported to Zoho")
+      : (inJunk ? NOT_SPAM_TITLE : IDLE_TITLE),
   });
 });
 
 browser.messageDisplayAction.onClicked.addListener(async (tab) => {
   console.log("zsr: clicked tab", tab.id, "tracked=", displayedByTab.has(tab.id));
   const message = displayedByTab.get(tab.id);
-  if (!message || reported.has(message.messageKey)) {
+  if (!message || reported.has(dedupeKey(message))) {
     console.warn("zsr: click ignored (no tracked message or already reported)");
     return;
   }
@@ -126,7 +153,13 @@ browser.messageDisplayAction.onClicked.addListener(async (tab) => {
     return;
   }
 
-  setActionState(tab.id, { enabled: false, title: "Reporting to Zoho…" });
+  const inJunk = isInJunkFolder(message);
+  const mode = inJunk ? "markNotSpam" : "moveToSpam";
+  const idleTitle = inJunk ? NOT_SPAM_TITLE : IDLE_TITLE;
+  setActionState(tab.id, {
+    enabled: false,
+    title: inJunk ? "Reporting as not spam…" : "Reporting to Zoho…",
+  });
   try {
   // 1) Server-side spam report FIRST: the local junk mark is an IMAP move
   // that relocates the server-side copy, and the Zoho messageId lookup
@@ -138,24 +171,27 @@ browser.messageDisplayAction.onClicked.addListener(async (tab) => {
     fromAddress: message.author,
     subject: message.subject || "",
     dateEpochMs,
+    mode,
+    inJunk,
   });
 
   // 2) Local junk mark via Thunderbird's own command path (full inheritance),
   // regardless of whether the Zoho side succeeded.
-  const local = await browser.zohoApi.markJunkSelected();
+  const local = await browser.zohoApi.markJunkSelected({ notJunk: inJunk });
   if (!local.ok) console.warn("zsr: local junk mark failed:", local.error);
 
   console.log("zsr: report=", JSON.stringify(report), "local=", JSON.stringify(local));
+  const localWord = inJunk ? "Not junk" : "Marked junk";
   if (report.ok) {
-    reported.add(message.messageKey);
-    setActionState(tab.id, { title: "Reported \u2713" });
+    reported.set(dedupeKey(message), mode);
+    setActionState(tab.id, { title: inJunk ? "Not spam \u2713" : "Reported \u2713" });
   } else if (report.error === "message_not_found") {
-    setActionState(tab.id, { title: "Marked junk; Zoho lookup failed. Retry.", enabled: true });
+    setActionState(tab.id, { title: `${localWord} locally; Zoho lookup failed. Retry.`, enabled: true });
   } else {
     console.warn("zsr: zoho report failed:", report.error);
-    setActionState(tab.id, { title: "Marked junk; Zoho error. Retry.", enabled: true });
+    setActionState(tab.id, { title: `${localWord} locally; Zoho error. Retry.`, enabled: true });
   }
-  setTimeout(() => setActionState(tab.id, { title: IDLE_TITLE }), 5000);
+  setTimeout(() => setActionState(tab.id, { title: idleTitle }), 5000);
   } catch (e) {
     console.error("zsr: click handler threw:", e);
     setActionState(tab.id, { title: `Error: ${e.message}`, enabled: true });

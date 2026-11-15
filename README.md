@@ -21,21 +21,27 @@ Zoho's own filter learns.
 1. Click **Report to Zoho as spam** on a message in Thunderbird. The button is
    offered on messages delivered to mailboxes reachable by your connected Zoho
    token (accounts are detected automatically).
-2. Thunderbird's native junk marking runs first. Your existing junk
+2. The extension resolves the message to Zoho's internal message id and calls
+   the Zoho Mail API's update-message endpoint in `moveToSpam` mode.
+3. Thunderbird's native junk marking follows. Your existing junk
    configuration, local adaptive training, and folder rules apply exactly as
    with the regular junk button.
-3. The extension resolves the message to Zoho's internal message id and calls
-   the Zoho Mail API's update-message endpoint in `moveToSpam` mode.
 4. Zoho treats that call as your spam feedback. Future similar messages arrive
    in the Spam folder carrying Zoho's own banner: *"You marked similar emails as
    Spam earlier."*
+
+Messages already sitting in a junk folder get the reverse action, **Report to
+Zoho as not spam**: the API call runs in `markNotSpam` mode (Zoho stops
+filtering similar mail and returns the message to the inbox) and Thunderbird's
+not-junk marking follows.
 
 ## Privacy
 
 - Everything runs client-side, first-party: your Thunderbird talks directly to
   Zoho's own API (or your data center's equivalent).
 - Minimum OAuth scopes only: list your mailboxes, read message metadata to
-  locate the message you clicked, and apply the spam report.
+  locate the message you clicked, list folders to resolve the Spam folder for
+  not-spam reports, and apply the report.
 - The alpha holds the access token in memory only; nothing is written to disk.
 - See [PRIVACY.md](PRIVACY.md).
 

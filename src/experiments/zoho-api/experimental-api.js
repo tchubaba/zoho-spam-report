@@ -139,14 +139,79 @@ const byDateDistance = (dateEpochMs) => (a, b) =>
   Math.abs((Number(a.receivedTime) || 0) - dateEpochMs) -
   Math.abs((Number(b.receivedTime) || 0) - dateEpochMs);
 
+// Zoho folders: folderId=spam alias is not accepted by /messages/view (it
+// wants the numeric id). Resolve it once per account via /folders.
+const junkFolderIdByAccount = new Map();
+
+async function getJunkFolderId(accountId) {
+  if (junkFolderIdByAccount.has(accountId)) return junkFolderIdByAccount.get(accountId);
+  const body = await apiFetch(`/api/accounts/${accountId}/folders`);
+  for (const f of body?.data || []) {
+    const type = String(f.folderType || f.type || "").toLowerCase();
+    const name = String(f.folderName || "").toLowerCase();
+    if (type === "spam" || type === "junk" || name === "spam" || name === "junk") {
+      junkFolderIdByAccount.set(accountId, String(f.folderId));
+      return String(f.folderId);
+    }
+  }
+  console.warn("zohoApi: no Spam/Junk folder in",
+    JSON.stringify((body?.data || []).map((f) => f.folderName)));
+  return null;
+}
+
 async function findMessageId(details) {
-  const recent = await apiFetch(
-    `/api/accounts/${details.accountId}/messages/view?limit=100&sortBy=date&sortorder=false`
+  // Default view covers the inbox; messages already sitting in server-side
+  // Spam (the report-not-spam direction) need the Spam folder explicitly.
+  const queries = [
+    `/api/accounts/${details.accountId}/messages/view?limit=100&sortBy=date&sortorder=false`,
+  ];
+  if (details.inJunk) {
+    try {
+      const folderId = await getJunkFolderId(details.accountId);
+      if (folderId) {
+        queries.push(
+          `/api/accounts/${details.accountId}/messages/view?limit=100&sortBy=date&sortorder=false&folderId=${folderId}`
+        );
+      }
+    } catch (e) {
+      console.warn("zohoApi.findMessageId: could not resolve Spam folder id",
+        "(missing ZohoMail.folders.READ scope?)", e?.message);
+    }
+  }
+  let messages = [];
+  for (const url of queries) {
+    try {
+      const recent = await apiFetch(url);
+      messages = recent?.data || [];
+      const hit = pickMatch(messages, details);
+      if (hit) return hit;
+    } catch (e) {
+      console.warn("zohoApi.findMessageId: query failed",
+        url.includes("folderId=spam") ? "(spam folder)" : "(inbox)", e?.message);
+    }
+  }
+  console.warn(
+    "zohoApi.findMessageId: no match. looking for",
+    JSON.stringify({
+      from: emailOf(details.fromAddress),
+      subject: stripPrefixes(details.subject),
+      dateEpochMs: details.dateEpochMs,
+    }),
+    "in", messages.length, "recent entries; closest by sender:",
+    JSON.stringify(
+      messages
+        .filter((m) => emailOf(m.fromAddress) === emailOf(details.fromAddress))
+        .slice(0, 5)
+        .map((m) => ({ subject: m.subject, receivedTime: m.receivedTime, folderId: m.folderId }))
+    )
   );
-  const messages = recent?.data || [];
+  return null;
+}
+
+function pickMatch(messages, details) {
   const from = emailOf(details.fromAddress);
   const subject = stripPrefixes(details.subject);
-  const WINDOW_MS = 40 * 60 * 1000; // TB clock vs Zoho receivedTime tolerance
+  const WINDOW_MS = 3 * 60 * 60 * 1000; // TB clock vs Zoho receivedTime tolerance
 
   const near = messages.filter((m) => {
     if (emailOf(m.fromAddress) !== from) return false;
@@ -162,17 +227,6 @@ async function findMessageId(details) {
   );
   if (loose.length) return String(loose.sort(byDateDistance(details.dateEpochMs))[0].messageId);
 
-  console.warn(
-    "zohoApi.findMessageId: no match. looking for",
-    JSON.stringify({ from, subject, dateEpochMs: details.dateEpochMs }),
-    "in", messages.length, "recent entries; closest by sender:",
-    JSON.stringify(
-      messages
-        .filter((m) => emailOf(m.fromAddress) === from)
-        .slice(0, 5)
-        .map((m) => ({ subject: m.subject, receivedTime: m.receivedTime, folderId: m.folderId }))
-    )
-  );
   return null;
 }
 
@@ -194,6 +248,7 @@ var zohoApi = class extends ExtensionCommon.ExtensionAPI {
         },
 
         async clearConnection() {
+          junkFolderIdByAccount.clear();
           state.dc = null;
           state.accessToken = null;
           state.expiresAt = 0;
@@ -256,21 +311,22 @@ var zohoApi = class extends ExtensionCommon.ExtensionAPI {
         },
 
         async report(details) {
+          const mode = details.mode === "markNotSpam" ? "markNotSpam" : "moveToSpam";
           try {
             const messageId = await findMessageId(details);
             if (!messageId) return { ok: false, error: "message_not_found" };
             await apiFetch(`/api/accounts/${details.accountId}/updatemessage`, {
               method: "PUT",
-              body: JSON.stringify({ mode: "moveToSpam", messageId: [messageId] }),
+              body: JSON.stringify({ mode, messageId: [messageId] }),
             });
-            return { ok: true, messageId };
+            return { ok: true, messageId, mode };
           } catch (e) {
             console.warn("zohoApi.report failed:", e?.message);
             return { ok: false, error: e?.message || "unknown" };
           }
         },
 
-        async markJunkSelected() {
+        async markJunkSelected({ notJunk = false } = {}) {
           // Drive Thunderbird's own junk machinery (folder move, server junk
           // keyword, adaptive filter training) instead of reimplementing it.
           let lastErr = "no mail:3pane window found";
@@ -279,7 +335,10 @@ var zohoApi = class extends ExtensionCommon.ExtensionAPI {
               const view = win.GetDBView ? win.GetDBView() : null;
               const hdrs = win.GetSelectedMsgHdrs ? win.GetSelectedMsgHdrs() : null;
               if (view && hdrs?.length) {
-                view.markMessages(hdrs, Ci.nsMsgViewCommandType.junk);
+                const cmd = notJunk
+                  ? Ci.nsMsgViewCommandType.markNotJunk
+                  : Ci.nsMsgViewCommandType.junk;
+                view.markMessages(hdrs, cmd);
                 return { ok: true, method: "dbview" };
               }
             } catch (e) {
@@ -287,8 +346,8 @@ var zohoApi = class extends ExtensionCommon.ExtensionAPI {
             }
             try {
               if (typeof win.goDoCommand === "function") {
-                win.goDoCommand("cmdMarkJunk");
-                return { ok: true, method: "cmdMarkJunk" };
+                win.goDoCommand(notJunk ? "cmdMarkNotJunk" : "cmdMarkJunk");
+                return { ok: true, method: notJunk ? "cmdMarkNotJunk" : "cmdMarkJunk" };
               }
             } catch (e) {
               lastErr = e?.message || lastErr;

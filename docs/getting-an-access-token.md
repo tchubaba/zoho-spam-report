@@ -27,7 +27,7 @@ flow is planned for a future release.
    - Access Token URL: `https://accounts.zoho.com/oauth/v2/token`
    - Client ID / Secret: from step 1
    - Scope:
-     `ZohoMail.accounts.READ,ZohoMail.messages.READ,ZohoMail.messages.UPDATE`
+     `ZohoMail.accounts.READ,ZohoMail.messages.READ,ZohoMail.messages.UPDATE,ZohoMail.folders.READ`
    - Client Authentication: **Send client credentials in body**
      (Zoho rejects Basic-header auth)
 2. **Get New Access Token** → the consent page opens → approve → Postman

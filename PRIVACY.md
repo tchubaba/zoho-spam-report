@@ -10,8 +10,10 @@ machine and only to perform the action you explicitly request.
   nothing, sends nothing.
 - **Minimal scopes.** Connecting grants the extension exactly three Zoho Mail
   scopes: `ZohoMail.accounts.READ` (list which mailboxes your token controls),
-  `ZohoMail.messages.READ` (locate the message you clicked on), and
-  `ZohoMail.messages.UPDATE` (apply your spam report). Nothing else.
+  `ZohoMail.messages.READ` (locate the message you clicked on),
+  `ZohoMail.messages.UPDATE` (apply your spam or not-spam report), and
+  `ZohoMail.folders.READ` (resolve the Spam folder's id so not-spam reports
+  can find messages already sitting in Spam). Nothing else.
 - **Token storage.** During the alpha, OAuth tokens are held in memory only and never written to
   disk. Password-manager storage arrives with the one-click Connect flow.
 - **What a spam report sends to Zoho.** The Zoho `messageId` of the message you
