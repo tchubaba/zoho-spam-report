@@ -1,11 +1,11 @@
 {
   "manifest_version": 2,
-  "name": "Zoho Spam Report",
+  "name": "Spam Report for Zoho Mail",
   "version": "0.1.0",
   "description": "Report junk to Zoho Mail's spam filter from Thunderbird. Unofficial; not affiliated with Zoho.",
   "browser_specific_settings": {
     "gecko": {
-      "id": "zoho-spam-report@tchubaba.net",
+      "id": "spam-report-for-zoho-mail@tchubaba.net",
       "strict_min_version": "128.0"
     }
   },
@@ -41,5 +41,13 @@
         "script": "src/experiments/zoho-api/experimental-api.js"
       }
     }
+  },
+  "author": "Daniel da Silva",
+  "homepage_url": "https://github.com/tchubaba/spam-report-for-zoho-mail",
+  "icons": {
+    "32": "src/icons/icon32.png",
+    "48": "src/icons/icon48.png",
+    "96": "src/icons/icon96.png",
+    "128": "src/icons/icon128.png"
   }
 }

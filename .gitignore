@@ -1,6 +1,7 @@
 # Build artifacts
 *.xpi
 dist/
+__pycache__/
 web-ext-artifacts/
 
 # Dependencies
@@ -15,6 +16,8 @@ node_modules/
 *.local
 token*
 zoho-client.json
+dist/
+__pycache__/
 
 # OS/editor noise
 .DS_Store

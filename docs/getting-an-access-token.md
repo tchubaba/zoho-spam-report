@@ -9,7 +9,7 @@ flow is planned for a future release.
 1. Open <https://api-console.zoho.com> while logged into your Zoho account.
 2. **Create Application → Server-Based**.
    - The console rejects hyphens/punctuation in names. Use letters, numbers and
-     spaces only (e.g. `Zoho Spam Report Dev`).
+     spaces only (Zoho rejects names containing "Zoho"; use e.g. `Spam Report for Thunderbird`).
    - Homepage URL: anything (it is only displayed on the consent page).
    - Authorized Redirect URI: add **exactly**
      `https://oauth.pstmn.io/v1/callbacks`
@@ -36,7 +36,7 @@ flow is planned for a future release.
 
 ## 3. Paste into the extension
 
-Thunderbird → Add-ons → Zoho Spam Report → Options → pick the data center,
+Thunderbird → Add-ons → Spam Report for Zoho Mail → Options → pick the data center,
 paste the token, hit **Use token**. The token lives in memory only; when it
 expires (~1 h), repeat step 2 (Postman can refresh it with one click while the
 app runs).

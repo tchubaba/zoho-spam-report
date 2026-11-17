@@ -1,4 +1,4 @@
-/* Zoho Spam Report: background script
+/* Spam Report for Zoho Mail: background script
  *
  * - Maps Thunderbird identities to Zoho mailboxes via the connected token
  *   (GET /api/accounts). Only messages delivered to a mapped mailbox get an
@@ -66,7 +66,7 @@ async function refreshAccountMap() {
     for (const za of zohoAccounts) map.set(za.email, za);
     zohoByEmail = map;
   } catch (e) {
-    console.warn("zoho-spam-report: account map refresh failed:", e && e.message);
+    console.warn("spam-report-for-zoho-mail: account map refresh failed:", e && e.message);
   }
 }
 
@@ -246,7 +246,7 @@ async function loadZohoClientConfig() {
       await browser.zohoApi.setClientConfig(cfg);
     }
   } catch (e) {
-    console.warn("zoho-spam-report: zoho-client.json not loaded:", e && e.message);
+    console.warn("spam-report-for-zoho-mail: zoho-client.json not loaded:", e && e.message);
   }
 }
 

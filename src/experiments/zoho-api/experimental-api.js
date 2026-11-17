@@ -522,8 +522,8 @@ function startListener(dc) {
             return;
           }
           writeAndClose(connection, "200 OK",
-            "<html><head><title>Zoho Spam Report</title></head><body style=\"font-family:sans-serif\">" +
-            "<h3>Zoho Spam Report</h3><p>Authentication complete. You can close this tab " +
+            "<html><head><title>Spam Report for Zoho Mail</title></head><body style=\"font-family:sans-serif\">" +
+            "<h3>Spam Report for Zoho Mail</h3><p>Authentication complete. You can close this tab " +
             "and finish in Thunderbird.</p></body></html>");
           handleCallback(params);
         },

@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Zoho Spam Report (the extension) processes mail data exclusively on your own
+Spam Report for Zoho Mail (the extension) processes mail data exclusively on your own
 machine and only to perform the action you explicitly request.
 
 - **No servers.** The extension ships no backend. All API calls go directly from

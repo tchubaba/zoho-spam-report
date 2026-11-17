@@ -1,4 +1,4 @@
-# Zoho Spam Report
+# Spam Report for Zoho Mail
 
 **Status: pre-alpha.** A Thunderbird extension for Zoho Mail-hosted mailboxes: one
 button press reports a message to both Thunderbird's local junk controls and

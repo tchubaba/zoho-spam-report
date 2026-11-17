@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/), versioning per
 
 ### Added
 - Project skeleton.
+- Renamed the add-on to **Spam Report for Zoho Mail** (the extension ID is
+  unchanged, so updates carry over). The Zoho OAuth application itself must
+  avoid the Zoho name (their console rejects it); "Spam Report for
+  Thunderbird" is the recommended app name shown on Zoho's consent page.
 - One-click **Connect Zoho**: OAuth consent opens in the system browser and the
   extension receives the redirect on loopback port 8642. The refresh token is
   kept in Thunderbird's built-in password manager; access tokens stay in memory

@@ -1,4 +1,4 @@
-/* Zoho Spam Report: options page
+/* Spam Report for Zoho Mail: options page
  * One-click OAuth connect (loopback callback handled by the experiment),
  * connected-user list with disconnect, detected Zoho mailboxes, and
  * Thunderbird identity matching preview. Manual token paste kept as an
